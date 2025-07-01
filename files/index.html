@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Управление родительским контролем</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 2em; background-color: #f0f2f5; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 2em; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1, h2 { color: #333; }
+        .user-card { background: #fafafa; border: 1px solid #ddd; padding: 1em; margin-bottom: 1em; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; }
+        .user-card h2 { margin: 0; }
+        .btn { padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-secondary { background-color: #6c757d; color: white; }
+        .btn-danger { background-color: #dc3545; color: white; margin-left: 5px; }
+        .btn-success { background-color: #28a745; color: white; margin-top: 1em; }
+        .modal { display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
+        .modal-content { background-color: #fefefe; margin: 5% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 700px; border-radius: 8px; }
+        .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .form-section { border-top: 1px solid #eee; padding-top: 1em; margin-top: 1em; }
+        .form-row { margin-bottom: 1em; }
+        .list-item { display: flex; align-items: center; margin-bottom: 5px; }
+        .list-item input { flex-grow: 1; margin-right: 10px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], input[type="time"] { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        .days-selector label { display: inline-block; margin-right: 10px; font-weight: normal;}
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Пользователи</h1>
+        <div id="userList"></div>
+        <button id="addUserBtn" class="btn btn-primary">Добавить пользователя</button>
+    </div>
+
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="modalTitle">Редактирование пользователя</h2>
+            <form id="editForm">
+                <input type="hidden" id="edit-index">
+                <div class="form-row">
+                    <label for="edit-name">Имя пользователя:</label>
+                    <input type="text" id="edit-name" required>
+                </div>
+
+                <div class="form-section">
+                    <h3>Правила доступа в интернет</h3>
+                    <div id="access-rules-container"></div>
+                    <button type="button" id="addAccessRuleBtn" class="btn btn-secondary">Добавить правило</button>
+                </div>
+
+                <div class="form-section">
+                    <h3>Заблокированные домены</h3>
+                    <div id="blocked-domains-container"></div>
+                    <button type="button" id="addDomainBtn" class="btn btn-secondary">Добавить домен</button>
+                </div>
+
+                <div class="form-section">
+                    <h3>Устройства (MAC-адреса)</h3>
+                    <div id="devices-container"></div>
+                    <button type="button" id="addDeviceBtn" class="btn btn-secondary">Добавить устройство</button>
+                </div>
+
+                <button type="submit" class="btn btn-success">Сохранить все изменения</button>
+                <div id="status" style="margin-top: 1em;"></div>
+            </form>
+        </div>
+    </div>
+
+<script>
+// --- Глобальные переменные и константы ---
+const cgiUrl = '/cgi-bin/parental-control.cgi';
+let configData = []; // Здесь будет храниться весь конфиг (массив пользователей)
+
+// --- Элементы DOM ---
+const userListDiv = document.getElementById('userList');
+const modal = document.getElementById('editModal');
+const modalTitle = document.getElementById('modalTitle');
+const form = document.getElementById('editForm');
+const statusDiv = document.getElementById('status');
+const closeModalBtn = document.querySelector('.close');
+
+// --- Функции для рендеринга (отображения данных) ---
+
+// Рендерит список всех пользователей на главной странице
+function renderUserList() {
+    userListDiv.innerHTML = '';
+    if (configData.length === 0) {
+        userListDiv.innerHTML = '<p>Пользователи не найдены. Добавьте первого.</p>';
+    }
+    configData.forEach((user, index) => {
+        const card = document.createElement('div');
+        card.className = 'user-card';
+        card.innerHTML = `
+            <h2>${escapeHTML(user.name)}</h2>
+            <div>
+                <button class="btn btn-primary" onclick="openEditModal(${index})">Редактировать</button>
+                <button class="btn btn-danger" onclick="deleteUser(${index})">Удалить</button>
+            </div>
+        `;
+        userListDiv.appendChild(card);
+    });
+}
+
+// Открывает модальное окно и заполняет его данными пользователя (или пустыми полями для нового)
+function openEditModal(index = null) {
+    form.reset();
+    statusDiv.textContent = '';
+    const isNewUser = index === null;
+    const user = isNewUser ? { name: '', internet_access: [], blocked_domains: [], devices: [] } : configData[index];
+
+    modalTitle.textContent = isNewUser ? 'Добавление нового пользователя' : `Редактирование: ${user.name}`;
+    document.getElementById('edit-index').value = index;
+    document.getElementById('edit-name').value = user.name;
+    
+    // Динамически создаем поля для вложенных массивов
+    renderListInputs('access-rules-container', user.internet_access, createAccessRuleInput);
+    renderListInputs('blocked-domains-container', user.blocked_domains, createSimpleInput);
+    renderListInputs('devices-container', user.devices, createSimpleInput);
+
+    modal.style.display = 'block';
+}
+
+// Универсальная функция для рендеринга списков (доменов, устройств, правил)
+function renderListInputs(containerId, items, createInputFn) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    items.forEach((item, index) => {
+        container.appendChild(createInputFn(item, index));
+    });
+}
+
+// Создает поле для ввода домена или MAC-адреса
+function createSimpleInput(value, index) {
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `
+        <input type="text" value="${escapeHTML(value)}" required>
+        <button type="button" class="btn btn-danger" onclick="this.parentElement.remove()">×</button>
+    `;
+    return div;
+}
+
+// Создает сложное поле для правила доступа (дни недели, время)
+function createAccessRuleInput(rule, index) {
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+    const dayCheckboxes = days.map(day => `
+        <label>
+            <input type="checkbox" value="${day}" ${rule.days.includes(day) ? 'checked' : ''}> ${day}
+        </label>
+    `).join('');
+
+    div.innerHTML = `
+        <div style="width: 100%;">
+            <div class="days-selector">${dayCheckboxes}</div>
+            <div style="display: flex; gap: 10px; margin-top: 5px;">
+                <input type="time" value="${rule.start}" required>
+                <input type="time" value="${rule.end}" required>
+                <button type="button" class="btn btn-danger" onclick="this.closest('.list-item').remove()">×</button>
+            </div>
+        </div>
+    `;
+    return div;
+}
+
+
+// --- Функции для работы с данными и API ---
+
+// Загрузка конфига с сервера
+async function loadConfig() {
+    try {
+        const response = await fetch(cgiUrl);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
+        // Получаем текст и чистим его
+        let text = await response.text();
+        text = text.trim();
+        
+        // Проверка на пустой ответ
+        if (!text) {
+            console.warn("Empty response, using empty array");
+            configData = [];
+        } else {
+            // Удаляем возможные BOM-символы
+            if (text.charCodeAt(0) === 0xFEFF) {
+                text = text.substring(1);
+            }
+            configData = JSON.parse(text);
+        }
+        
+        renderUserList();
+    } catch (e) {
+        console.error("Config load error:", e);
+        userListDiv.innerHTML = `<p style="color: red;">Ошибка загрузки: ${e.message}</p>`;
+        configData = [];
+    }
+}
+
+// Сохранение конфига на сервер
+async function saveConfig() {
+    const jsonData = JSON.stringify(configData);
+    console.log("Sending JSON:", jsonData);
+    
+    try {
+        const response = await fetch(cgiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': jsonData.length.toString()
+            },
+            body: jsonData
+        });
+        
+        const text = await response.text();
+        console.log("Raw response:", text);
+        
+        if (!response.ok) throw new Error(text || "Server error");
+        
+        const result = JSON.parse(text);
+        if (result.status !== "success") {
+            throw new Error(result.message || "Unknown error");
+        }
+        
+        alert("Настройки успешно сохранены!");
+    } catch (e) {
+        console.error("Save error:", e);
+        alert("Ошибка сохранения: " + e.message);
+    }
+}
+
+// Удаление пользователя
+function deleteUser(index) {
+    if (confirm(`Вы уверены, что хотите удалить пользователя "${configData[index].name}"?`)) {
+        configData.splice(index, 1);
+        saveConfig(); // Сразу сохраняем изменения
+    }
+}
+
+// Парсинг формы и обновление данных в `configData`
+function handleFormSubmit(event) {
+    event.preventDefault();
+    
+    const userData = {
+        name: document.getElementById('edit-name').value.trim(),
+        internet_access: parseAccessRules(),
+        blocked_domains: parseSimpleList('blocked-domains-container')
+            .filter(domain => domain.trim() !== ''),
+        devices: parseSimpleList('devices-container')
+            .map(mac => mac.trim().toUpperCase())
+            .filter(mac => /^([0-9A-F]{2}[:-]){5}([0-9A-F]{2})$/.test(mac))
+    };
+
+    // Валидация
+    if (!userData.name) {
+        alert("Имя пользователя обязательно!");
+        return;
+    }
+    if (userData.devices.length === 0) {
+        alert("Должно быть указано хотя бы одно устройство!");
+        return;
+    }
+
+    const index = document.getElementById('edit-index').value;
+    if (index === 'null' || index === '') {
+        configData.push(userData);
+    } else {
+        configData[index] = userData;
+    }
+
+    saveConfig();
+}
+
+// Вспомогательная функция для парсинга простых списков (домены, MAC)
+function parseSimpleList(containerId) {
+    const container = document.getElementById(containerId);
+    return Array.from(container.querySelectorAll('input[type="text"]'))
+        .map(input => input.value.trim())
+        .filter(value => value !== '');
+}
+
+// Вспомогательная функция для парсинга правил доступа
+function parseAccessRules() {
+    const container = document.getElementById('access-rules-container');
+    const rules = [];
+    
+    container.querySelectorAll('.list-item').forEach(item => {
+        const days = Array.from(item.querySelectorAll('input[type="checkbox"]:checked'))
+            .map(cb => cb.value);
+            
+        const times = item.querySelectorAll('input[type="time"]');
+        if (times.length === 2 && days.length > 0) {
+            rules.push({
+                days: days,
+                start: times[0].value || "00:00",
+                end: times[1].value || "23:59"
+            });
+        }
+    });
+    return rules;
+}
+
+
+// --- Вспомогательные утилиты ---
+function escapeHTML(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
+
+// --- Привязка событий ---
+document.addEventListener('DOMContentLoaded', loadConfig);
+form.addEventListener('submit', handleFormSubmit);
+
+// Кнопки добавления новых полей внутри формы
+document.getElementById('addAccessRuleBtn').addEventListener('click', () => {
+    document.getElementById('access-rules-container').appendChild(createAccessRuleInput({days: [], start: '00:00', end: '23:59'}));
+});
+document.getElementById('addDomainBtn').addEventListener('click', () => {
+    document.getElementById('blocked-domains-container').appendChild(createSimpleInput(''));
+});
+document.getElementById('addDeviceBtn').addEventListener('click', () => {
+    document.getElementById('devices-container').appendChild(createSimpleInput(''));
+});
+
+// Открытие модалки для нового юзера
+document.getElementById('addUserBtn').addEventListener('click', () => openEditModal(null));
+
+// Закрытие модалки
+closeModalBtn.onclick = () => { modal.style.display = "none"; }
+window.onclick = (event) => {
+    if (event.target == modal) {
+        modal.style.display = "none";
+    }
+}
+</script>
+
+</body>
+</html>

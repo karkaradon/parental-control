@@ -1,0 +1,33 @@
+[
+    {
+        "name": "Boris",
+        "internet_access": [
+            {
+                "days": [
+                    "mon",
+                    "tue",
+                    "wed",
+                    "thu",
+                    "fri",
+                    "sat",
+                    "sun"
+                ],
+                "start": "12:00",
+                "end": "22:00"
+            }
+        ],
+        "blocked_domains": [
+            "wildberries.ru",
+            "wbbasket.ru",
+            "wb.ru",
+            "ozon.ru"
+        ],
+        "devices": [
+            "C2:C3:27:74:E0:8C",
+            "76:54:E4:4A:24:01",
+            "DC:9E:8F:54:B0:FF",
+            "BC:5F:F4:6E:E2:18",
+            "B8:AB:62:95:81:1D"
+        ]
+    }
+]
