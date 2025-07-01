@@ -1,9 +1,7 @@
 #!/bin/bash
 
 # --- Переменные конфигурации ---
-# URL-ы, откуда скачивать файлы (ЗАМЕНИТЕ НА ВАШ URL GitHub Pages после загрузки)
-# Пример: BASE_URL="https://ВАШ_НИК.github.io/openwrt-parental-control/files"
-BASE_URL="https://raw.githubusercontent.com/YOUR_GITHUB_USER/YOUR_REPO_NAME/main/files" # Пример для прямого скачивания из ветки 'main'
+BASE_URL="https://raw.githubusercontent.com/karkaradon/parental-control/main/files" # Пример для прямого скачивания из ветки 'main'
 
 # Имена файлов (соответствуют структуре на GitHub)
 INSTALL_SCRIPT_NAME="install.sh"
@@ -60,22 +58,22 @@ log_info "Скачиваем файлы в $TMP_DIR и копируем в це�
 
 # Скачиваем скрипт родительского контроля
 log_info "Скачиваем $PARENTAL_CONTROL_SH..."
-# wget -O "$TMP_DIR/$PARENTAL_CONTROL_SH" "$BASE_URL/$PARENTAL_CONTROL_SH" || log_error "Не удалось скачать $PARENTAL_CONTROL_SH"
+wget -O "$TMP_DIR/$PARENTAL_CONTROL_SH" "$BASE_URL/$PARENTAL_CONTROL_SH" || log_error "Не удалось скачать $PARENTAL_CONTROL_SH"
 cp "$TMP_DIR/$PARENTAL_CONTROL_SH" "$PARENTAL_CONTROL_BASE_DIR/$PARENTAL_CONTROL_SH" || log_error "Не удалось скопировать $PARENTAL_CONTROL_SH"
 
 # Скачиваем файл конфигурации JSON
 log_info "Скачиваем $CONFIG_JSON..."
-# wget -O "$TMP_DIR/$CONFIG_JSON" "$BASE_URL/$CONFIG_JSON" || log_error "Не удалось скачать $CONFIG_JSON"
+wget -O "$TMP_DIR/$CONFIG_JSON" "$BASE_URL/$CONFIG_JSON" || log_error "Не удалось скачать $CONFIG_JSON"
 cp "$TMP_DIR/$CONFIG_JSON" "$PARENTAL_CONTROL_BASE_DIR/$CONFIG_JSON" || log_error "Не удалось скопировать $CONFIG_JSON"
 
 # Скачиваем CGI-скрипт (он находится в files/web/parental-control.cgi)
 log_info "Скачиваем $PARENTAL_CONTROL_CGI..."
-# wget -O "$TMP_DIR/$PARENTAL_CONTROL_CGI" "$BASE_URL/web/$PARENTAL_CONTROL_CGI" || log_error "Не удалось скачать $PARENTAL_CONTROL_CGI"
+wget -O "$TMP_DIR/$PARENTAL_CONTROL_CGI" "$BASE_URL/web/$PARENTAL_CONTROL_CGI" || log_error "Не удалось скачать $PARENTAL_CONTROL_CGI"
 cp "$TMP_DIR/$PARENTAL_CONTROL_CGI" "$CGI_BIN_DIR/$PARENTAL_CONTROL_CGI" || log_error "Не удалось скопировать $PARENTAL_CONTROL_CGI"
 
 # Скачиваем index.html (он находится в files/web/index.html)
 log_info "Скачиваем $WEB_INDEX_HTML..."
-# wget -O "$TMP_DIR/$WEB_INDEX_HTML" "$BASE_URL/web/$WEB_INDEX_HTML" || log_error "Не удалось скачать $WEB_INDEX_HTML"
+wget -O "$TMP_DIR/$WEB_INDEX_HTML" "$BASE_URL/web/$WEB_INDEX_HTML" || log_error "Не удалось скачать $WEB_INDEX_HTML"
 cp "$TMP_DIR/$WEB_INDEX_HTML" "$PARENTAL_CONTROL_WEB_DIR/$WEB_INDEX_HTML" || log_error "Не удалось скопировать $WEB_INDEX_HTML"
 
 # Если есть style.css
