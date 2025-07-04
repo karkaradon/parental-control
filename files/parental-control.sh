@@ -1,8 +1,7 @@
 #!/bin/sh
 
-# Раскомментируйте для подробной отладки. Будет выводить каждую выполняемую команду.
+# Раскомментируйте для подробной отладки.
 # set -x
-
 
 CONFIG="/etc/parental-control/config.json"
 TABLE="pc_table"
@@ -10,17 +9,36 @@ CHAIN="pc_devices_forward"
 
 # ==================== НАЧАЛО БЛОКА ADGUARD HOME ====================
 
-# http://192.168.10.1:3000
-ADGUARD_HOST="127.0.0.1:3000"
-ADGUARD_USER="admin"
-ADGUARD_PASS="Adgpass@"
+# Путь к файлу с настройками AdGuard Home
+ADGUARD_CONFIG_FILE="/etc/parental-control/adguard.conf"
+
+# Функция для логирования
+log() {
+    echo "$(date '+%F %T') - $1"
+}
+
+# Проверяем наличие файла конфигурации и загружаем его
+if [ -f "$ADGUARD_CONFIG_FILE" ]; then
+    # Команда '.' (source) выполняет скрипт в текущем контексте,
+    # загружая переменные ADGUARD_HOST, ADGUARD_USER, ADGUARD_PASS
+    . "$ADGUARD_CONFIG_FILE"
+else
+    log "[!!!] КРИТИЧЕСКАЯ ОШИБКА: Файл конфигурации $ADGUARD_CONFIG_FILE не найден!"
+    log "[!!!] Запустите инсталлятор для его создания или создайте вручную."
+    exit 1
+fi
+
+# Проверяем, что переменные были успешно загружены
+if [ -z "$ADGUARD_HOST" ] || [ -z "$ADGUARD_USER" ] || [ -z "$ADGUARD_PASS" ]; then
+    log "[!!!] КРИТИЧЕСКАЯ ОШИБКА: Одна или несколько переменных для AdGuard не определены в файле $ADGUARD_CONFIG_FILE."
+    exit 1
+fi
 
 update_adguard_rules() {
     local rules_json="$1"
     
-    log "Отправка новых правил в AdGuard Home..."
-    # log "DEBUG JSON: $rules_json" # Раскомментируйте для отладки
-
+    log "Отправка новых правил в AdGuard Home ($ADGUARD_HOST)..."
+    
     http_code=$(curl -s -o /dev/null -w "%{http_code}" \
          -u "$ADGUARD_USER:$ADGUARD_PASS" \
          -X POST \

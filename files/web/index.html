@@ -22,8 +22,23 @@
         .form-row { margin-bottom: 1em; }
         .list-item { display: flex; align-items: center; margin-bottom: 5px; }
         .list-item input { flex-grow: 1; margin-right: 10px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input[type="text"], input[type="time"] { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        
+        label { 
+            display: block; 
+            margin-bottom: 5px; 
+            font-weight: bold;
+            font-size: 14px; /* Добавлено для заголовков полей */
+        }
+
+        input[type="text"], input[type="time"] { 
+            width: 100%; 
+            padding: 8px; 
+            box-sizing: border-box; 
+            border: 1px solid #ccc; 
+            border-radius: 4px;
+            font-size: 14px; /* Добавлен размер шрифта для полей ввода */
+        }
+
         .days-selector label { display: inline-block; margin-right: 10px; font-weight: normal;}
     </style>
 </head>
@@ -47,7 +62,7 @@
                 </div>
 
                 <div class="form-section">
-                    <h3>Правила доступа в интернет</h3>
+                    <h3>Расписание доступа в интернет</h3>
                     <div id="access-rules-container"></div>
                     <button type="button" id="addAccessRuleBtn" class="btn btn-secondary">Добавить правило</button>
                 </div>
@@ -113,7 +128,7 @@ function openEditModal(index = null) {
     const user = isNewUser ? { name: '', internet_access: [], blocked_domains: [], devices: [] } : configData[index];
 
     modalTitle.textContent = isNewUser ? 'Добавление нового пользователя' : `Редактирование: ${user.name}`;
-    document.getElementById('edit-index').value = index;
+    document.getElementById('edit-index').value = index === null ? '' : index;
     document.getElementById('edit-name').value = user.name;
     
     // Динамически создаем поля для вложенных массивов
@@ -122,6 +137,7 @@ function openEditModal(index = null) {
     renderListInputs('devices-container', user.devices, createSimpleInput);
 
     modal.style.display = 'block';
+    // document.getElementById('edit-name').focus();
 }
 
 // Универсальная функция для рендеринга списков (доменов, устройств, правил)
@@ -149,9 +165,14 @@ function createAccessRuleInput(rule, index) {
     const div = document.createElement('div');
     div.className = 'list-item';
     const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+
+    // Русские названия дней недели
+    const dayTranslations = {
+        mon: 'ПН', tue: 'ВТ', wed: 'СР', thu: 'ЧТ', fri: 'ПТ', sat: 'СБ', sun: 'ВС'
+    };
     const dayCheckboxes = days.map(day => `
         <label>
-            <input type="checkbox" value="${day}" ${rule.days.includes(day) ? 'checked' : ''}> ${day}
+            <input type="checkbox" value="${day}" ${rule.days.includes(day) ? 'checked' : ''}> ${dayTranslations[day]}
         </label>
     `).join('');
 
@@ -177,16 +198,13 @@ async function loadConfig() {
         const response = await fetch(cgiUrl);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         
-        // Получаем текст и чистим его
         let text = await response.text();
         text = text.trim();
         
-        // Проверка на пустой ответ
         if (!text) {
             console.warn("Empty response, using empty array");
             configData = [];
         } else {
-            // Удаляем возможные BOM-символы
             if (text.charCodeAt(0) === 0xFEFF) {
                 text = text.substring(1);
             }
@@ -210,8 +228,7 @@ async function saveConfig() {
         const response = await fetch(cgiUrl, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': jsonData.length.toString()
+                'Content-Type': 'application/json'
             },
             body: jsonData
         });
@@ -227,6 +244,10 @@ async function saveConfig() {
         }
         
         alert("Настройки успешно сохранены!");
+        
+        modal.style.display = "none";
+        renderUserList(); 
+
     } catch (e) {
         console.error("Save error:", e);
         alert("Ошибка сохранения: " + e.message);
@@ -234,10 +255,10 @@ async function saveConfig() {
 }
 
 // Удаление пользователя
-function deleteUser(index) {
+async function deleteUser(index) {
     if (confirm(`Вы уверены, что хотите удалить пользователя "${configData[index].name}"?`)) {
         configData.splice(index, 1);
-        saveConfig(); // Сразу сохраняем изменения
+        await saveConfig(); 
     }
 }
 
@@ -248,14 +269,12 @@ function handleFormSubmit(event) {
     const userData = {
         name: document.getElementById('edit-name').value.trim(),
         internet_access: parseAccessRules(),
-        blocked_domains: parseSimpleList('blocked-domains-container')
-            .filter(domain => domain.trim() !== ''),
+        blocked_domains: parseSimpleList('blocked-domains-container'),
         devices: parseSimpleList('devices-container')
             .map(mac => mac.trim().toUpperCase())
             .filter(mac => /^([0-9A-F]{2}[:-]){5}([0-9A-F]{2})$/.test(mac))
     };
 
-    // Валидация
     if (!userData.name) {
         alert("Имя пользователя обязательно!");
         return;
@@ -266,10 +285,10 @@ function handleFormSubmit(event) {
     }
 
     const index = document.getElementById('edit-index').value;
-    if (index === 'null' || index === '') {
+    if (index === '') {
         configData.push(userData);
     } else {
-        configData[index] = userData;
+        configData[parseInt(index, 10)] = userData;
     }
 
     saveConfig();
@@ -307,6 +326,7 @@ function parseAccessRules() {
 
 // --- Вспомогательные утилиты ---
 function escapeHTML(str) {
+    if (typeof str !== 'string') return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 
@@ -315,15 +335,25 @@ function escapeHTML(str) {
 document.addEventListener('DOMContentLoaded', loadConfig);
 form.addEventListener('submit', handleFormSubmit);
 
-// Кнопки добавления новых полей внутри формы
 document.getElementById('addAccessRuleBtn').addEventListener('click', () => {
-    document.getElementById('access-rules-container').appendChild(createAccessRuleInput({days: [], start: '00:00', end: '23:59'}));
+    const container = document.getElementById('access-rules-container');
+    const newItem = createAccessRuleInput({days: [], start: '00:00', end: '23:59'});
+    container.appendChild(newItem);
+    newItem.querySelector('input[type="time"]').focus(); 
 });
+
 document.getElementById('addDomainBtn').addEventListener('click', () => {
-    document.getElementById('blocked-domains-container').appendChild(createSimpleInput(''));
+    const container = document.getElementById('blocked-domains-container');
+    const newItem = createSimpleInput('');
+    container.appendChild(newItem);
+    newItem.querySelector('input[type="text"]').focus();
 });
+
 document.getElementById('addDeviceBtn').addEventListener('click', () => {
-    document.getElementById('devices-container').appendChild(createSimpleInput(''));
+    const container = document.getElementById('devices-container');
+    const newItem = createSimpleInput('');
+    container.appendChild(newItem);
+    newItem.querySelector('input[type="text"]').focus();
 });
 
 // Открытие модалки для нового юзера
